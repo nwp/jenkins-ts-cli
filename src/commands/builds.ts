@@ -51,6 +51,102 @@ export function registerBuildCommands(program: Command): void {
     });
 
   program
+    .command("wait-build")
+    .description("Wait for a build to finish and report its result")
+    .argument("<name>", "job name")
+    .argument("[build]", "build number (default: lastBuild)", "lastBuild")
+    .option("--timeout <seconds>", "maximum time to wait in seconds", "0")
+    .action(async (name: string, build: string, opts: { timeout: string }) => {
+      const ctx = await resolveContext(program);
+      const jobUrl = ctx.client.jobUrl(name);
+      const timeout = parseInt(opts.timeout, 10) * 1000;
+      const start = Date.now();
+
+      while (true) {
+        const data = await ctx.client.getJson<BuildInfo>(
+          `${jobUrl}/${build}/api/json?tree=number,result,building,duration,timestamp,displayName,url`,
+        );
+        if (!data.building) {
+          const status = data.result ?? "UNKNOWN";
+          if (ctx.json) {
+            printOutput(data, true);
+          } else {
+            console.log(`Build ${data.displayName ?? `#${data.number}`} finished: ${status} (${formatDuration(data.duration)})`);
+          }
+          if (data.result !== "SUCCESS") process.exitCode = 1;
+          return;
+        }
+        if (timeout > 0 && Date.now() - start >= timeout) {
+          throw new Error(`Timed out after ${opts.timeout}s waiting for build to finish.`);
+        }
+        await Bun.sleep(3000);
+      }
+    });
+
+  program
+    .command("list-builds")
+    .description("List recent builds for a job")
+    .argument("<name>", "job name")
+    .option("--limit <n>", "number of builds to show", "10")
+    .action(async (name: string, opts: { limit: string }) => {
+      const ctx = await resolveContext(program);
+      const limit = parseInt(opts.limit, 10);
+      const data = await ctx.client.getJson<{
+        builds: BuildInfo[];
+      }>(
+        `${ctx.client.jobUrl(name)}/api/json?tree=builds[number,result,building,duration,timestamp,displayName,url]{0,${limit}}`,
+      );
+      const builds = data.builds ?? [];
+      if (ctx.json) {
+        printOutput(builds, true);
+      } else if (builds.length === 0) {
+        console.log("No builds.");
+      } else {
+        for (const b of builds) {
+          const status = b.building ? "BUILDING" : (b.result ?? "UNKNOWN");
+          const name = b.displayName ?? `#${b.number}`;
+          const dur = b.building ? formatDuration(Date.now() - b.timestamp) : formatDuration(b.duration);
+          console.log(`${name.padEnd(12)} ${status.padEnd(10)} ${dur}`);
+        }
+      }
+    });
+
+  program
+    .command("tail")
+    .description("Stream console output starting from the current position (new lines only)")
+    .argument("<name>", "job name")
+    .argument("[build]", "build number (default: lastBuild)", "lastBuild")
+    .action(async (name: string, build: string) => {
+      const ctx = await resolveContext(program);
+      const jobUrl = ctx.client.jobUrl(name);
+
+      const initialRes = await ctx.client.get(
+        `${jobUrl}/${build}/logText/progressiveText?start=0`,
+        { raw: true },
+      );
+      let offset = parseInt(initialRes.headers.get("X-Text-Size") ?? "0", 10);
+      const moreData = initialRes.headers.get("X-More-Data") === "true";
+
+      if (!moreData) {
+        console.error("Build already finished. Use 'console' to view the full log.");
+        return;
+      }
+
+      while (true) {
+        const res = await ctx.client.get(
+          `${jobUrl}/${build}/logText/progressiveText?start=${offset}`,
+          { raw: true },
+        );
+        const text = await res.text();
+        if (text) process.stdout.write(text);
+        const newOffset = res.headers.get("X-Text-Size");
+        if (newOffset) offset = parseInt(newOffset, 10);
+        if (res.headers.get("X-More-Data") !== "true") break;
+        await Bun.sleep(1000);
+      }
+    });
+
+  program
     .command("set-build-description")
     .description("Set the description of a build")
     .argument("<name>", "job name")

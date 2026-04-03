@@ -78,6 +78,29 @@ Exit code 0 means SUCCESS. Exit code 1 means the build failed or is still buildi
 jenkins --json get-build my-job 42
 \`\`\`
 
+### Wait for an externally triggered build to finish
+
+\`\`\`bash
+jenkins wait-build my-pr-job 147
+\`\`\`
+
+Blocks until the build completes, then exits 0 for SUCCESS or 1 for failure. Useful for monitoring builds triggered by webhooks (e.g., PR builds). Add \`--timeout 300\` to limit wait time to 5 minutes.
+
+### List recent builds for a job
+
+\`\`\`bash
+jenkins list-builds my-job
+jenkins --json list-builds my-job --limit 25
+\`\`\`
+
+### Stream only new console output (skip history)
+
+\`\`\`bash
+jenkins tail my-job
+\`\`\`
+
+Like \`console --follow\` but starts from the current position. Useful for joining long-running builds mid-stream.
+
 ### List all jobs (including those in folders)
 
 \`\`\`bash
@@ -104,7 +127,7 @@ jenkins get-job my-folder/my-job
 
 These commands support \`--json\` for structured output:
 
-- \`list-jobs\`, \`list-plugins\`, \`who-am-i\`, \`version\`, \`get-build\`, \`list-changes\`, \`get-view\`
+- \`list-jobs\`, \`list-plugins\`, \`who-am-i\`, \`version\`, \`get-build\`, \`wait-build\`, \`list-builds\`, \`list-changes\`, \`get-view\`
 
 Streaming commands (\`console\`, \`build --follow\`, \`groovy\`) always output plain text.
 
@@ -156,9 +179,13 @@ export function commandsReference(): string {
 | \`jenkins build <name> --follow\` | Trigger and stream console output |
 | \`jenkins build <name> --wait\` | Trigger and wait for completion |
 | \`jenkins get-build <name> [number]\` | Get build status, result, duration (exits 1 if not SUCCESS) |
+| \`jenkins wait-build <name> [number]\` | Wait for build to finish, report result (exits 1 if not SUCCESS) |
+| \`jenkins wait-build <name> --timeout 300\` | Wait with timeout in seconds |
+| \`jenkins list-builds <name> [--limit N]\` | List recent builds (default 10) with status and duration |
 | \`jenkins console <name>\` | Print console output (last build) |
 | \`jenkins console <name> <number>\` | Print console output for build #N |
 | \`jenkins console <name> --follow\` | Stream console output in real-time |
+| \`jenkins tail <name> [number]\` | Stream new console output only (skip history) |
 | \`jenkins set-build-description <name> <n> "text"\` | Set build description |
 | \`jenkins set-build-display-name <name> <n> "text"\` | Set build display name |
 | \`jenkins delete-builds <name> 40,41,42\` | Delete builds (comma-separated) |
