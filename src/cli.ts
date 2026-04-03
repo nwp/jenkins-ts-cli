@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { resolveCredentials } from "./auth.ts";
+import { resolveCredentials, type Credentials } from "./auth.ts";
 import { JenkinsClient } from "./client.ts";
 import { registerSystemCommands } from "./commands/system.ts";
 import { registerConfigureCommands } from "./commands/configure.ts";
@@ -18,6 +18,7 @@ export interface GlobalOptions {
 
 export interface CommandContext {
   client: JenkinsClient;
+  credentials: Credentials;
   json: boolean;
 }
 
@@ -53,6 +54,7 @@ export async function resolveContext(program: Command): Promise<CommandContext> 
   const credentials = await resolveCredentials(serverUrl, opts.auth);
   return {
     client: new JenkinsClient(serverUrl, credentials),
+    credentials,
     json: opts.json,
   };
 }

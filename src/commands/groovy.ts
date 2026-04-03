@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import { resolveContext, type GlobalOptions } from "../cli.ts";
-import { resolveCredentials } from "../auth.ts";
+import { resolveContext } from "../cli.ts";
+import { readStdin } from "../stdin.ts";
 import { runJar } from "../jar.ts";
 
 export function registerGroovyCommands(program: Command): void {
@@ -13,13 +13,13 @@ export function registerGroovyCommands(program: Command): void {
 
       let code: string;
       if (!script || script === "-") {
-        code = await ctx.client.readStdin();
+        code = await readStdin();
       } else {
-        const file = Bun.file(script);
-        if (!(await file.exists())) {
-          throw new Error(`Script file not found: ${script}`);
+        try {
+          code = await Bun.file(script).text();
+        } catch {
+          throw new Error(`Script file not found or unreadable: ${script}`);
         }
-        code = await file.text();
       }
 
       const res = await ctx.client.postForm("/scriptText", { script: code });
@@ -31,14 +31,8 @@ export function registerGroovyCommands(program: Command): void {
     .command("groovysh")
     .description("Start an interactive Groovy shell (requires Java)")
     .action(async () => {
-      const opts = program.opts<GlobalOptions>();
-      const serverUrl = opts.s || process.env.JENKINS_URL;
-      if (!serverUrl) {
-        throw new Error("Jenkins server URL required. Use -s <url> or set JENKINS_URL");
-      }
-      const credentials = await resolveCredentials(serverUrl, opts.auth);
       const ctx = await resolveContext(program);
-      const exitCode = await runJar(ctx.client, credentials, ["groovysh"]);
+      const exitCode = await runJar(ctx.client, ctx.credentials, ["groovysh"]);
       process.exit(exitCode);
     });
 }

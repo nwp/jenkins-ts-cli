@@ -1,9 +1,7 @@
-import { homedir } from "os";
 import { join } from "path";
 import { mkdir, readFile, writeFile } from "fs/promises";
-import { normalizeUrl } from "./paths.ts";
+import { CONFIG_DIR, normalizeUrl } from "./paths.ts";
 
-const CONFIG_DIR = join(homedir(), ".jenkins-cli");
 const CREDS_FILE = join(CONFIG_DIR, "credentials.json");
 const SERVICE_LABEL = "jenkins-cli";
 
@@ -71,6 +69,7 @@ export async function getStoredToken(
     "find-internet-password",
     "-a", username,
     "-s", url,
+    "-l", SERVICE_LABEL,
     "-w",
   ], { stdout: "pipe", stderr: "pipe" });
 
@@ -91,6 +90,7 @@ export async function deleteCredentials(serverUrl: string): Promise<boolean> {
     "delete-internet-password",
     "-a", username,
     "-s", url,
+    "-l", SERVICE_LABEL,
   ], { stdout: "ignore", stderr: "ignore" });
 
   await proc.exited;

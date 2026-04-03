@@ -1,6 +1,9 @@
 import type { Command } from "commander";
+import type { JenkinsClient } from "../client.ts";
 import { resolveContext } from "../cli.ts";
 import { printOutput } from "../output.ts";
+import { followConsole } from "../console.ts";
+import { readStdin } from "../stdin.ts";
 
 export function registerJobCommands(program: Command): void {
   program
@@ -34,7 +37,7 @@ export function registerJobCommands(program: Command): void {
     .argument("<name>", "job name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      const xml = await ctx.client.readStdin();
+      const xml = await readStdin();
       const parts = name.split("/");
       const jobName = parts.pop()!;
       const folderPath = parts.length > 0 ? ctx.client.jobUrl(parts.join("/")) : "";
@@ -75,7 +78,7 @@ export function registerJobCommands(program: Command): void {
     .argument("<name>", "job name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      const xml = await ctx.client.readStdin();
+      const xml = await readStdin();
       await ctx.client.post(`${ctx.client.jobUrl(name)}/config.xml`, {
         body: xml,
         contentType: "application/xml",
@@ -128,12 +131,7 @@ export function registerJobCommands(program: Command): void {
       }
 
       const queueUrl = res.headers.get("Location");
-      if (!queueUrl) {
-        console.log("Build triggered.");
-        return;
-      }
-
-      if (!opts.follow && !opts.wait) {
+      if (!queueUrl || (!opts.follow && !opts.wait)) {
         console.log("Build triggered.");
         return;
       }
@@ -146,7 +144,7 @@ export function registerJobCommands(program: Command): void {
 
       if (opts.follow) {
         await followConsole(ctx.client, jobUrl, buildNumber);
-      } else if (opts.wait) {
+      } else {
         await waitForCompletion(ctx.client, jobUrl, buildNumber);
         console.log(`Build #${buildNumber} completed.`);
       }
@@ -162,8 +160,14 @@ interface JenkinsJob {
   jobs?: JenkinsJob[];
 }
 
+const FOLDER_CLASSES = ["Folder", "OrganizationFolder", "WorkflowMultiBranchProject"];
+
+function isFolder(job: JenkinsJob): boolean {
+  return FOLDER_CLASSES.some((cls) => job._class?.includes(cls));
+}
+
 async function listJobsRecursive(
-  client: import("../client.ts").JenkinsClient,
+  client: JenkinsClient,
   path: string,
 ): Promise<JenkinsJob[]> {
   const prefix = path ? `${client.jobUrl(path)}` : "";
@@ -171,20 +175,24 @@ async function listJobsRecursive(
     `${prefix}/api/json?tree=jobs[name,fullName,url,color,_class,jobs[name,fullName,url,color,_class]]`,
   );
   const result: JenkinsJob[] = [];
+  const folderPromises: Promise<JenkinsJob[]>[] = [];
   for (const job of data.jobs ?? []) {
-    if (job._class?.includes("Folder") || job._class?.includes("OrganizationFolder")) {
+    if (isFolder(job)) {
       const childPath = path ? `${path}/${job.name}` : job.name;
-      const children = await listJobsRecursive(client, childPath);
-      result.push(...children);
+      folderPromises.push(listJobsRecursive(client, childPath));
     } else {
       result.push(job);
     }
+  }
+  const folderResults = await Promise.all(folderPromises);
+  for (const children of folderResults) {
+    result.push(...children);
   }
   return result;
 }
 
 async function waitForBuildNumber(
-  client: import("../client.ts").JenkinsClient,
+  client: JenkinsClient,
   queueUrl: string,
 ): Promise<number | null> {
   const queueApiUrl = queueUrl.endsWith("/")
@@ -202,40 +210,13 @@ async function waitForBuildNumber(
       }>(path);
       if (data.cancelled) return null;
       if (data.executable?.number) return data.executable.number;
-    } catch {
-      // queue item may not be available yet
-    }
+    } catch {}
   }
   return null;
 }
 
-async function followConsole(
-  client: import("../client.ts").JenkinsClient,
-  jobUrl: string,
-  buildNumber: number,
-): Promise<void> {
-  let offset = 0;
-  while (true) {
-    const res = await client.get(
-      `${jobUrl}/${buildNumber}/logText/progressiveText?start=${offset}`,
-      { raw: true },
-    );
-    const text = await res.text();
-    if (text) {
-      process.stdout.write(text);
-    }
-    const newOffset = res.headers.get("X-Text-Size");
-    if (newOffset) {
-      offset = parseInt(newOffset, 10);
-    }
-    const moreData = res.headers.get("X-More-Data");
-    if (moreData !== "true") break;
-    await Bun.sleep(1000);
-  }
-}
-
 async function waitForCompletion(
-  client: import("../client.ts").JenkinsClient,
+  client: JenkinsClient,
   jobUrl: string,
   buildNumber: number,
 ): Promise<void> {

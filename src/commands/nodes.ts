@@ -1,5 +1,23 @@
 import type { Command } from "commander";
+import type { JenkinsClient } from "../client.ts";
 import { resolveContext } from "../cli.ts";
+import { nodeUrl } from "../paths.ts";
+import { readStdin } from "../stdin.ts";
+
+async function waitForNodeState(
+  client: JenkinsClient,
+  name: string,
+  targetOffline: boolean,
+  timeout: number,
+): Promise<boolean> {
+  const url = nodeUrl(name);
+  for (let i = 0; i < timeout; i++) {
+    const status = await client.getJson<{ offline: boolean }>(`${url}/api/json?tree=offline`);
+    if (status.offline === targetOffline) return true;
+    await Bun.sleep(1000);
+  }
+  return false;
+}
 
 export function registerNodeCommands(program: Command): void {
   program
@@ -8,7 +26,7 @@ export function registerNodeCommands(program: Command): void {
     .argument("<name>", "node name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      const xml = await ctx.client.readStdin();
+      const xml = await readStdin();
       await ctx.client.post(
         `/computer/doCreateItem?name=${encodeURIComponent(name)}&type=hudson.slaves.DumbSlave`,
         { body: xml, contentType: "application/xml" },
@@ -22,7 +40,7 @@ export function registerNodeCommands(program: Command): void {
     .argument("<name>", "node name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      await ctx.client.post(`/computer/${encodeURIComponent(name)}/doDelete`);
+      await ctx.client.post(`${nodeUrl(name)}/doDelete`);
       console.log(`Node '${name}' deleted.`);
     });
 
@@ -32,11 +50,11 @@ export function registerNodeCommands(program: Command): void {
     .argument("<name>", "node name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      const xml = await ctx.client.readStdin();
-      await ctx.client.post(
-        `/computer/${encodeURIComponent(name)}/config.xml`,
-        { body: xml, contentType: "application/xml" },
-      );
+      const xml = await readStdin();
+      await ctx.client.post(`${nodeUrl(name)}/config.xml`, {
+        body: xml,
+        contentType: "application/xml",
+      });
       console.log(`Node '${name}' updated.`);
     });
 
@@ -46,7 +64,7 @@ export function registerNodeCommands(program: Command): void {
     .argument("<name>", "node name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      await ctx.client.post(`/computer/${encodeURIComponent(name)}/launchSlaveAgent`);
+      await ctx.client.post(`${nodeUrl(name)}/launchSlaveAgent`);
       console.log(`Node '${name}' connection initiated.`);
     });
 
@@ -57,10 +75,9 @@ export function registerNodeCommands(program: Command): void {
     .option("-m, --message <message>", "offline message", "")
     .action(async (name: string, opts: { message: string }) => {
       const ctx = await resolveContext(program);
-      await ctx.client.postForm(
-        `/computer/${encodeURIComponent(name)}/doDisconnect`,
-        { offlineMessage: opts.message },
-      );
+      await ctx.client.postForm(`${nodeUrl(name)}/doDisconnect`, {
+        offlineMessage: opts.message,
+      });
       console.log(`Node '${name}' disconnected.`);
     });
 
@@ -70,14 +87,13 @@ export function registerNodeCommands(program: Command): void {
     .argument("<name>", "node name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      const status = await ctx.client.getJson<{ offline: boolean }>(
-        `/computer/${encodeURIComponent(name)}/api/json?tree=offline`,
-      );
+      const url = nodeUrl(name);
+      const status = await ctx.client.getJson<{ offline: boolean }>(`${url}/api/json?tree=offline`);
       if (!status.offline) {
         console.log(`Node '${name}' is already online.`);
         return;
       }
-      await ctx.client.post(`/computer/${encodeURIComponent(name)}/toggleOffline`);
+      await ctx.client.post(`${url}/toggleOffline`);
       console.log(`Node '${name}' brought online.`);
     });
 
@@ -88,17 +104,15 @@ export function registerNodeCommands(program: Command): void {
     .option("-m, --message <message>", "offline message", "")
     .action(async (name: string, opts: { message: string }) => {
       const ctx = await resolveContext(program);
-      const status = await ctx.client.getJson<{ offline: boolean }>(
-        `/computer/${encodeURIComponent(name)}/api/json?tree=offline`,
-      );
+      const url = nodeUrl(name);
+      const status = await ctx.client.getJson<{ offline: boolean }>(`${url}/api/json?tree=offline`);
       if (status.offline) {
         console.log(`Node '${name}' is already offline.`);
         return;
       }
-      await ctx.client.postForm(
-        `/computer/${encodeURIComponent(name)}/toggleOffline`,
-        { offlineMessage: opts.message },
-      );
+      await ctx.client.postForm(`${url}/toggleOffline`, {
+        offlineMessage: opts.message,
+      });
       console.log(`Node '${name}' taken offline.`);
     });
 
@@ -109,20 +123,13 @@ export function registerNodeCommands(program: Command): void {
     .option("--timeout <seconds>", "timeout in seconds", "60")
     .action(async (name: string, opts: { timeout: string }) => {
       const ctx = await resolveContext(program);
-      const timeout = parseInt(opts.timeout, 10);
-      const encoded = encodeURIComponent(name);
-      for (let i = 0; i < timeout; i++) {
-        const status = await ctx.client.getJson<{ offline: boolean }>(
-          `/computer/${encoded}/api/json?tree=offline`,
-        );
-        if (!status.offline) {
-          console.log(`Node '${name}' is online.`);
-          return;
-        }
-        await Bun.sleep(1000);
+      const ok = await waitForNodeState(ctx.client, name, false, parseInt(opts.timeout, 10));
+      if (ok) {
+        console.log(`Node '${name}' is online.`);
+      } else {
+        console.error(`Timed out waiting for node '${name}' to come online.`);
+        process.exit(1);
       }
-      console.error(`Timed out waiting for node '${name}' to come online.`);
-      process.exit(1);
     });
 
   program
@@ -132,19 +139,12 @@ export function registerNodeCommands(program: Command): void {
     .option("--timeout <seconds>", "timeout in seconds", "60")
     .action(async (name: string, opts: { timeout: string }) => {
       const ctx = await resolveContext(program);
-      const timeout = parseInt(opts.timeout, 10);
-      const encoded = encodeURIComponent(name);
-      for (let i = 0; i < timeout; i++) {
-        const status = await ctx.client.getJson<{ offline: boolean }>(
-          `/computer/${encoded}/api/json?tree=offline`,
-        );
-        if (status.offline) {
-          console.log(`Node '${name}' is offline.`);
-          return;
-        }
-        await Bun.sleep(1000);
+      const ok = await waitForNodeState(ctx.client, name, true, parseInt(opts.timeout, 10));
+      if (ok) {
+        console.log(`Node '${name}' is offline.`);
+      } else {
+        console.error(`Timed out waiting for node '${name}' to go offline.`);
+        process.exit(1);
       }
-      console.error(`Timed out waiting for node '${name}' to go offline.`);
-      process.exit(1);
     });
 }

@@ -64,9 +64,9 @@ export function registerSystemCommands(program: Command): void {
       const queue = await ctx.client.getJson<{
         items: { id: number }[];
       }>("/queue/api/json");
-      for (const item of queue.items) {
-        await ctx.client.post(`/queue/cancelItem?id=${item.id}`, { raw: true });
-      }
+      await Promise.all(
+        queue.items.map((item) => ctx.client.post(`/queue/cancelItem?id=${item.id}`, { raw: true })),
+      );
       console.log(`Cleared ${queue.items.length} item(s) from the queue.`);
     });
 

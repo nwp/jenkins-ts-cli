@@ -28,9 +28,7 @@ export class JenkinsClient {
         };
         this.crumb = { field: data.crumbRequestField, value: data.crumb };
       }
-    } catch {
-      // CRUMB not available — proceed without it
-    }
+    } catch {}
   }
 
   private crumbHeaders(): Record<string, string> {
@@ -100,14 +98,6 @@ export class JenkinsClient {
 
   jobUrl(name: string): string {
     return `/${jobPath(name)}`;
-  }
-
-  async readStdin(): Promise<string> {
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of Bun.stdin.stream()) {
-      chunks.push(chunk);
-    }
-    return Buffer.concat(chunks).toString("utf-8");
   }
 }
 

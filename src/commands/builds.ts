@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { resolveContext } from "../cli.ts";
 import { printOutput } from "../output.ts";
+import { followConsole } from "../console.ts";
 
 export function registerBuildCommands(program: Command): void {
   program
@@ -14,19 +15,7 @@ export function registerBuildCommands(program: Command): void {
       const jobUrl = ctx.client.jobUrl(name);
 
       if (opts.follow) {
-        let offset = 0;
-        while (true) {
-          const res = await ctx.client.get(
-            `${jobUrl}/${build}/logText/progressiveText?start=${offset}`,
-            { raw: true },
-          );
-          const text = await res.text();
-          if (text) process.stdout.write(text);
-          const newOffset = res.headers.get("X-Text-Size");
-          if (newOffset) offset = parseInt(newOffset, 10);
-          if (res.headers.get("X-More-Data") !== "true") break;
-          await Bun.sleep(1000);
-        }
+        await followConsole(ctx.client, jobUrl, build);
       } else {
         const text = await ctx.client.getText(`${jobUrl}/${build}/consoleText`);
         process.stdout.write(text);
@@ -72,9 +61,7 @@ export function registerBuildCommands(program: Command): void {
       const ctx = await resolveContext(program);
       const jobUrl = ctx.client.jobUrl(name);
       const numbers = builds.split(",").map((s) => s.trim());
-      for (const num of numbers) {
-        await ctx.client.post(`${jobUrl}/${num}/doDelete`);
-      }
+      await Promise.all(numbers.map((num) => ctx.client.post(`${jobUrl}/${num}/doDelete`)));
       console.log(`Deleted build(s): ${numbers.join(", ")}`);
     });
 

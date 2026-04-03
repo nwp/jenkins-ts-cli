@@ -1,6 +1,8 @@
 import type { Command } from "commander";
 import { resolveContext } from "../cli.ts";
 import { printOutput } from "../output.ts";
+import { viewUrl } from "../paths.ts";
+import { readStdin } from "../stdin.ts";
 
 export function registerViewCommands(program: Command): void {
   program
@@ -9,9 +11,7 @@ export function registerViewCommands(program: Command): void {
     .argument("<name>", "view name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      const xml = await ctx.client.getText(
-        `/view/${encodeURIComponent(name)}/config.xml`,
-      );
+      const xml = await ctx.client.getText(`${viewUrl(name)}/config.xml`);
       if (ctx.json) {
         printOutput({ name, xml }, true);
       } else {
@@ -25,7 +25,7 @@ export function registerViewCommands(program: Command): void {
     .argument("<name>", "view name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      const xml = await ctx.client.readStdin();
+      const xml = await readStdin();
       await ctx.client.post(
         `/createView?name=${encodeURIComponent(name)}`,
         { body: xml, contentType: "application/xml" },
@@ -39,7 +39,7 @@ export function registerViewCommands(program: Command): void {
     .argument("<name>", "view name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      await ctx.client.post(`/view/${encodeURIComponent(name)}/doDelete`);
+      await ctx.client.post(`${viewUrl(name)}/doDelete`);
       console.log(`View '${name}' deleted.`);
     });
 
@@ -49,11 +49,11 @@ export function registerViewCommands(program: Command): void {
     .argument("<name>", "view name")
     .action(async (name: string) => {
       const ctx = await resolveContext(program);
-      const xml = await ctx.client.readStdin();
-      await ctx.client.post(
-        `/view/${encodeURIComponent(name)}/config.xml`,
-        { body: xml, contentType: "application/xml" },
-      );
+      const xml = await readStdin();
+      await ctx.client.post(`${viewUrl(name)}/config.xml`, {
+        body: xml,
+        contentType: "application/xml",
+      });
       console.log(`View '${name}' updated.`);
     });
 
@@ -65,7 +65,7 @@ export function registerViewCommands(program: Command): void {
     .action(async (view: string, job: string) => {
       const ctx = await resolveContext(program);
       await ctx.client.post(
-        `/view/${encodeURIComponent(view)}/addJobToView?name=${encodeURIComponent(job)}`,
+        `${viewUrl(view)}/addJobToView?name=${encodeURIComponent(job)}`,
       );
       console.log(`Job '${job}' added to view '${view}'.`);
     });
@@ -78,7 +78,7 @@ export function registerViewCommands(program: Command): void {
     .action(async (view: string, job: string) => {
       const ctx = await resolveContext(program);
       await ctx.client.post(
-        `/view/${encodeURIComponent(view)}/removeJobFromView?name=${encodeURIComponent(job)}`,
+        `${viewUrl(view)}/removeJobFromView?name=${encodeURIComponent(job)}`,
       );
       console.log(`Job '${job}' removed from view '${view}'.`);
     });

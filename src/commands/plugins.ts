@@ -38,22 +38,17 @@ export function registerPluginCommands(program: Command): void {
 
       if (plugin.endsWith(".hpi") || plugin.endsWith(".jpi")) {
         const file = Bun.file(plugin);
-        if (!(await file.exists())) {
-          throw new Error(`Plugin file not found: ${plugin}`);
+        let buffer: ArrayBuffer;
+        try {
+          buffer = await file.arrayBuffer();
+        } catch {
+          throw new Error(`Plugin file not found or unreadable: ${plugin}`);
         }
         const formData = new FormData();
-        formData.append("name", new Blob([await file.arrayBuffer()]), file.name ?? "plugin.hpi");
-        await ctx.client.post("/pluginManager/uploadPlugin", {
-          body: formData,
-        });
-      } else if (plugin.startsWith("http://") || plugin.startsWith("https://")) {
-        const xml = `<jenkins><install plugin="${escapeXml(plugin)}" /></jenkins>`;
-        await ctx.client.post("/pluginManager/installNecessaryPlugins", {
-          body: xml,
-          contentType: "application/xml",
-        });
+        formData.append("name", new Blob([buffer]), file.name ?? "plugin.hpi");
+        await ctx.client.post("/pluginManager/uploadPlugin", { body: formData });
       } else {
-        const spec = plugin.includes("@") ? plugin : `${plugin}@latest`;
+        const spec = plugin.includes("@") || plugin.startsWith("http") ? plugin : `${plugin}@latest`;
         const xml = `<jenkins><install plugin="${escapeXml(spec)}" /></jenkins>`;
         await ctx.client.post("/pluginManager/installNecessaryPlugins", {
           body: xml,
