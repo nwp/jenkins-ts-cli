@@ -66,6 +66,18 @@ jenkins console my-job
 jenkins console my-job 42
 \`\`\`
 
+### Check build status (pass/fail) without streaming logs
+
+\`\`\`bash
+jenkins get-build my-job
+\`\`\`
+
+Exit code 0 means SUCCESS. Exit code 1 means the build failed or is still building. Use \`--json\` for full details (result, duration, URL, etc.).
+
+\`\`\`bash
+jenkins --json get-build my-job 42
+\`\`\`
+
 ### List all jobs (including those in folders)
 
 \`\`\`bash
@@ -92,7 +104,7 @@ jenkins get-job my-folder/my-job
 
 These commands support \`--json\` for structured output:
 
-- \`list-jobs\`, \`list-plugins\`, \`who-am-i\`, \`version\`, \`list-changes\`, \`get-view\`
+- \`list-jobs\`, \`list-plugins\`, \`who-am-i\`, \`version\`, \`get-build\`, \`list-changes\`, \`get-view\`
 
 Streaming commands (\`console\`, \`build --follow\`, \`groovy\`) always output plain text.
 
@@ -143,6 +155,7 @@ export function commandsReference(): string {
 | \`jenkins build <name> -p key=val\` | Parameterized build (repeatable) |
 | \`jenkins build <name> --follow\` | Trigger and stream console output |
 | \`jenkins build <name> --wait\` | Trigger and wait for completion |
+| \`jenkins get-build <name> [number]\` | Get build status, result, duration (exits 1 if not SUCCESS) |
 | \`jenkins console <name>\` | Print console output (last build) |
 | \`jenkins console <name> <number>\` | Print console output for build #N |
 | \`jenkins console <name> --follow\` | Stream console output in real-time |

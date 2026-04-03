@@ -23,6 +23,34 @@ export function registerBuildCommands(program: Command): void {
     });
 
   program
+    .command("get-build")
+    .description("Get build details (status, result, duration, etc.)")
+    .argument("<name>", "job name")
+    .argument("[build]", "build number (default: lastBuild)", "lastBuild")
+    .action(async (name: string, build: string) => {
+      const ctx = await resolveContext(program);
+      const data = await ctx.client.getJson<BuildInfo>(
+        `${ctx.client.jobUrl(name)}/${build}/api/json?tree=number,result,building,duration,estimatedDuration,timestamp,displayName,description,url`,
+      );
+      if (ctx.json) {
+        printOutput(data, true);
+      } else {
+        const status = data.building ? "BUILDING" : (data.result ?? "UNKNOWN");
+        const duration = data.building
+          ? formatDuration(Date.now() - data.timestamp) + " (so far)"
+          : formatDuration(data.duration);
+        console.log(`Build:    ${data.displayName ?? `#${data.number}`}`);
+        console.log(`Status:   ${status}`);
+        console.log(`Duration: ${duration}`);
+        if (data.description) console.log(`Desc:     ${data.description}`);
+        console.log(`URL:      ${data.url}`);
+      }
+      if (!data.building && data.result !== "SUCCESS") {
+        process.exitCode = 1;
+      }
+    });
+
+  program
     .command("set-build-description")
     .description("Set the description of a build")
     .argument("<name>", "job name")
@@ -90,4 +118,26 @@ export function registerBuildCommands(program: Command): void {
         }
       }
     });
+}
+
+interface BuildInfo {
+  number: number;
+  result: string | null;
+  building: boolean;
+  duration: number;
+  estimatedDuration: number;
+  timestamp: number;
+  displayName: string | null;
+  description: string | null;
+  url: string;
+}
+
+export function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = Math.floor(ms / 1000) % 60;
+  const minutes = Math.floor(ms / 60000) % 60;
+  const hours = Math.floor(ms / 3600000);
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
 }

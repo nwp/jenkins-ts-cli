@@ -114,6 +114,9 @@ jenkins -s URL build my-job --wait                         # Trigger and wait fo
 jenkins -s URL console my-job                              # Print console output (last build)
 jenkins -s URL console my-job 42                           # Print console output for build #42
 jenkins -s URL console my-job --follow                     # Stream console output in real-time
+jenkins -s URL get-build my-job                            # Get build status/result (last build)
+jenkins -s URL get-build my-job 42                         # Get build status for build #42
+jenkins -s URL --json get-build my-job                     # Get full build details as JSON
 jenkins -s URL set-build-description my-job 42 "Fixed it"  # Set build description
 jenkins -s URL set-build-display-name my-job 42 "v1.0"     # Set build display name
 jenkins -s URL delete-builds my-job 40,41,42               # Delete builds (comma-separated)
@@ -192,6 +195,7 @@ jenkins -s URL --json list-jobs
 jenkins -s URL --json list-plugins
 jenkins -s URL --json who-am-i
 jenkins -s URL --json version
+jenkins -s URL --json get-build my-job 42
 jenkins -s URL --json list-changes my-job 42
 jenkins -s URL --json get-view my-view
 ```
@@ -228,6 +232,7 @@ This CLI reimplements the Jenkins CLI using the REST API rather than the binary 
 ### Added Features
 
 - **`--json` flag** — Structured JSON output on supported commands for programmatic consumption.
+- **`get-build` command** — Get build status, result, duration, and URL. Not present in the Java CLI, which has no single command for querying build details. Exits with code 1 if the build result is not SUCCESS, making it useful for CI/CD scripts and agent workflows that need to check build outcomes.
 - **`configure` command** — Manage stored credentials (`set`, `show`, `clear`) without running a real Jenkins command.
 - **`install-skill` command** — Install a standard SKILL.md for AI coding agents (Claude, Copilot, Codex) into the current project directory.
 - **macOS Keychain integration** — Credentials stored securely and resolved automatically per server URL.
@@ -264,7 +269,7 @@ src/
     ├── system.ts     # version, who-am-i, quiet-down, cancel-quiet-down, clear-queue, reload-configuration
     ├── configure.ts  # configure set/show/clear
     ├── jobs.ts       # list-jobs, get-job, create-job, copy-job, delete-job, update-job, reload-job, build
-    ├── builds.ts     # console, set-build-description, set-build-display-name, delete-builds, list-changes
+    ├── builds.ts     # get-build, console, set-build-description, set-build-display-name, delete-builds, list-changes
     ├── nodes.ts      # create-node, delete-node, update-node, connect-node, disconnect-node, online/offline-node, wait-node-*
     ├── views.ts      # get-view, create-view, delete-view, update-view, add/remove-job-to/from-view
     ├── plugins.ts    # list-plugins, install-plugin, enable-plugin, disable-plugin
