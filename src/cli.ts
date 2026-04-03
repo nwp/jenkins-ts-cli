@@ -9,6 +9,7 @@ import { registerNodeCommands } from "./commands/nodes.ts";
 import { registerViewCommands } from "./commands/views.ts";
 import { registerPluginCommands } from "./commands/plugins.ts";
 import { registerGroovyCommands } from "./commands/groovy.ts";
+import { registerSkillCommands } from "./commands/skills.ts";
 
 export interface GlobalOptions {
   s?: string;
@@ -41,6 +42,7 @@ export function createProgram(): Command {
   registerViewCommands(program);
   registerPluginCommands(program);
   registerGroovyCommands(program);
+  registerSkillCommands(program);
 
   return program;
 }

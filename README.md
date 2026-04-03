@@ -168,6 +168,21 @@ echo 'println Jenkins.instance.version' | jenkins -s URL groovy -   # Execute fr
 jenkins -s URL groovysh                        # Interactive Groovy shell (requires Java)
 ```
 
+#### AI Agent Skill
+
+```bash
+jenkins install-skill                    # Auto-detect agents and install skill
+jenkins install-skill --agent claude     # Install for a specific agent (claude, copilot, codex)
+jenkins install-skill --force            # Overwrite existing skill files
+```
+
+The `install-skill` command writes a standard SKILL.md (with a command reference) into the current directory for any detected AI coding agents. It auto-detects `.claude/`, `.github/`, and `.codex/` directories, or you can target a specific agent with `--agent`. No server connection is required.
+
+Installed paths:
+- **Claude:** `.claude/skills/jenkins/SKILL.md`
+- **Copilot:** `.github/skills/jenkins/SKILL.md`
+- **Codex:** `.codex/skills/jenkins/SKILL.md`
+
 ### JSON Output
 
 Commands that return structured data support the `--json` flag:
@@ -214,6 +229,7 @@ This CLI reimplements the Jenkins CLI using the REST API rather than the binary 
 
 - **`--json` flag** — Structured JSON output on supported commands for programmatic consumption.
 - **`configure` command** — Manage stored credentials (`set`, `show`, `clear`) without running a real Jenkins command.
+- **`install-skill` command** — Install a standard SKILL.md for AI coding agents (Claude, Copilot, Codex) into the current project directory.
 - **macOS Keychain integration** — Credentials stored securely and resolved automatically per server URL.
 - **`JENKINS_URL` environment variable** — Allows omitting `-s` entirely when the env var is set.
 - **Parallel operations** — Queue clearing, build deletion, and folder traversal run concurrently.
@@ -242,6 +258,8 @@ src/
 ├── stdin.ts          # Shared stdin reader
 ├── output.ts         # Plain text / JSON output formatter
 ├── jar.ts            # JAR download, caching, version checking, Java subprocess
+├── skills/
+│   └── content.ts    # Embedded SKILL.md and command reference content
 └── commands/
     ├── system.ts     # version, who-am-i, quiet-down, cancel-quiet-down, clear-queue, reload-configuration
     ├── configure.ts  # configure set/show/clear
@@ -250,7 +268,8 @@ src/
     ├── nodes.ts      # create-node, delete-node, update-node, connect-node, disconnect-node, online/offline-node, wait-node-*
     ├── views.ts      # get-view, create-view, delete-view, update-view, add/remove-job-to/from-view
     ├── plugins.ts    # list-plugins, install-plugin, enable-plugin, disable-plugin
-    └── groovy.ts     # groovy (REST), groovysh (JAR subprocess)
+    ├── groovy.ts     # groovy (REST), groovysh (JAR subprocess)
+    └── skills.ts     # install-skill (AI agent skill installer)
 
 tests/
 ├── auth.test.ts      # Credential resolution priority
