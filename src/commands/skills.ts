@@ -11,11 +11,7 @@ const AGENT_SKILL_DIRS: Record<AgentType, string> = {
   codex: ".codex/skills/jenkins",
 };
 
-const AGENT_DETECT_DIRS: Record<AgentType, string> = {
-  claude: ".claude",
-  copilot: ".github",
-  codex: ".codex",
-};
+const VALID_AGENTS = Object.keys(AGENT_SKILL_DIRS) as AgentType[];
 
 interface InstallResult {
   agent: AgentType;
@@ -32,9 +28,8 @@ export function registerSkillCommands(program: Command): void {
     .action(async (opts: { force: boolean; agent?: string }) => {
       const cwd = process.cwd();
 
-      if (opts.agent && !["claude", "copilot", "codex"].includes(opts.agent)) {
-        console.error(`Unknown agent type: ${opts.agent}. Use claude, copilot, or codex.`);
-        process.exit(1);
+      if (opts.agent && !VALID_AGENTS.includes(opts.agent as AgentType)) {
+        throw new Error(`Unknown agent type: ${opts.agent}. Use ${VALID_AGENTS.join(", ")}.`);
       }
 
       const agents: AgentType[] = opts.agent
@@ -42,16 +37,14 @@ export function registerSkillCommands(program: Command): void {
         : detectAgents(cwd);
 
       if (agents.length === 0) {
-        console.error("No AI agent directories detected in the current directory.");
-        console.error("Checked for: .claude/, .github/, .codex/");
-        console.error("Use --agent <claude|copilot|codex> to install for a specific agent.");
-        process.exit(1);
+        const dirs = VALID_AGENTS.map((a) => agentRootDir(a) + "/").join(", ");
+        throw new Error(
+          `No AI agent directories detected. Checked for: ${dirs}\n` +
+          `Use --agent <${VALID_AGENTS.join("|")}> to install for a specific agent.`,
+        );
       }
 
-      const results: InstallResult[] = [];
-      for (const agent of agents) {
-        results.push(installSkill(cwd, agent, opts.force));
-      }
+      const results = agents.map((agent) => installSkill(cwd, agent, opts.force));
 
       for (const r of results) {
         const label = r.agent.charAt(0).toUpperCase() + r.agent.slice(1);
@@ -71,11 +64,13 @@ export function registerSkillCommands(program: Command): void {
 }
 
 function detectAgents(cwd: string): AgentType[] {
-  const agents: AgentType[] = [];
-  for (const [agent, dir] of Object.entries(AGENT_DETECT_DIRS) as [AgentType, string][]) {
-    if (existsSync(join(cwd, dir))) agents.push(agent);
-  }
-  return agents;
+  return VALID_AGENTS.filter((agent) =>
+    existsSync(join(cwd, agentRootDir(agent))),
+  );
+}
+
+function agentRootDir(agent: AgentType): string {
+  return AGENT_SKILL_DIRS[agent].split("/")[0]!;
 }
 
 function installSkill(cwd: string, agent: AgentType, force: boolean): InstallResult {
