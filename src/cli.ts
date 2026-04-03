@@ -29,7 +29,7 @@ export function createProgram(): Command {
   program
     .name("jenkins")
     .description("Jenkins CLI client")
-    .version("0.1.0")
+    .version("0.2.0")
     .option("-s <url>", "Jenkins server URL")
     .option("--auth <credentials>", "username:apitoken")
     .option("--json", "output as JSON where supported", false);
